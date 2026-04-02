@@ -1,0 +1,43 @@
+:root {
+  --ink: #2c2520;
+  --ink-soft: #6b5d52;
+  --paper: #ece8e1;
+  --paper-strong: #f7f3ee;
+  --charcoal: #15161a;
+  --accent: #c64b3b;
+
+  --sans: 'Trebuchet MS', 'Gill Sans', 'Segoe UI', sans-serif;
+  --heading: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  --mono: Consolas, 'Courier New', monospace;
+
+  font: 15px/1.5 var(--sans);
+  color: var(--ink);
+  background-color: var(--paper);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #f1ede6 0%, #e2ddd6 55%, #dcd6cf 100%);
+}
+
+#root {
+  min-height: 100svh;
+  font-family: var(--sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--heading);
+}
+
+select,
+button {
+  font-family: var(--sans);
+}
