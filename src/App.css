@@ -1,9 +1,14 @@
 .app-shell {
   min-height: 100svh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 24px 28px 32px;
+  padding-left: max(28px, env(safe-area-inset-left));
+  padding-right: max(28px, env(safe-area-inset-right));
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-bottom: max(32px, env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
@@ -47,10 +52,13 @@
 }
 
 .year-tab {
+  flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: transparent;
   color: rgba(255, 255, 255, 0.7);
-  padding: 8px 12px;
+  padding: 10px 14px;
+  min-height: 44px;
+  box-sizing: border-box;
   border-radius: 999px;
   font-size: 12px;
   cursor: pointer;
@@ -98,8 +106,12 @@
 
 .inline-field select {
   min-width: 170px;
+  width: 100%;
+  max-width: 100%;
   font: inherit;
-  padding: 8px 10px;
+  padding: 10px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
   border-radius: 10px;
   border: 1px solid rgba(68, 60, 52, 0.2);
   background: #fff;
@@ -116,9 +128,13 @@
 .meta-pill {
   background: #1f2024;
   color: #fff;
-  padding: 6px 10px;
+  padding: 8px 12px;
+  min-height: 36px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -138,11 +154,12 @@
 .map-shell {
   position: relative;
   height: 100%;
-  min-height: 520px;
+  min-height: clamp(360px, 50vh, 520px);
   border-radius: 20px;
   overflow: hidden;
   border: 1px solid rgba(68, 60, 52, 0.2);
   background: #e6e1da;
+  touch-action: manipulation;
 }
 
 .map {
@@ -307,6 +324,12 @@
   color: #5b4238;
 }
 
+.overview-note a {
+  color: #a63d2d;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .district-popup .leaflet-popup-content-wrapper {
   background: rgba(20, 20, 24, 0.92);
   color: #fff;
@@ -319,51 +342,212 @@
   background: rgba(20, 20, 24, 0.92);
 }
 
+/* Leaflet zoom: sit above fixed chat FAB + safe area */
+@media (max-width: 768px) {
+  .map-shell .leaflet-bottom.leaflet-right {
+    bottom: max(78px, calc(env(safe-area-inset-bottom, 0px) + 62px)) !important;
+    right: 8px !important;
+  }
+}
+
 @media (max-width: 1100px) {
   .main-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .overview-panel {
     order: 2;
+  }
+
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .overview-card {
+    padding: 12px;
+    min-width: 0;
+  }
+
+  .overview-card strong {
+    font-size: clamp(16px, 4.2vw, 20px);
+    word-break: break-word;
   }
 }
 
 @media (max-width: 860px) {
   .topbar {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px 18px;
+    border-radius: 16px;
+  }
+
+  .title-block {
+    min-width: 0;
+  }
+
+  .title-block h1 {
+    font-size: clamp(1.35rem, 5vw, 2rem);
+    line-height: 1.15;
+  }
+
+  .subtitle {
+    font-size: 12px;
+    line-height: 1.45;
   }
 
   .year-tabs {
+    flex-wrap: nowrap;
     justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    width: 100%;
+    padding-bottom: 2px;
+    margin: 0 -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .year-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .toolbar {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 14px;
+    padding: 14px 16px;
+  }
+
+  .toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 12px;
+  }
+
+  .inline-field {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .inline-field select {
+    min-width: 0;
+    font-size: 16px;
   }
 
   .toolbar-right {
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .toolbar-right .meta-pill {
+    justify-content: center;
+    text-align: center;
+    font-size: 9px;
+    padding: 8px 6px;
   }
 }
 
 @media (max-width: 640px) {
   .app-shell {
-    padding: 16px;
+    gap: 14px;
+    padding: 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-top: max(12px, env(safe-area-inset-top));
+    /* Space for fixed chat FAB + home indicator */
+    padding-bottom: max(100px, calc(env(safe-area-inset-bottom) + 88px));
+  }
+
+  .topbar {
+    padding: 14px 16px;
+  }
+
+  .kicker {
+    font-size: 10px;
+    letter-spacing: 0.2em;
   }
 
   .map-shell {
-    min-height: 380px;
+    min-height: clamp(280px, 42dvh, 420px);
+    border-radius: 16px;
   }
 
-  .inline-field select {
-    min-width: 140px;
+  .median-badge {
+    top: 10px;
+    right: 10px;
+    left: auto;
+    max-width: calc(100% - 100px);
+    padding: 8px 10px;
+    font-size: 9px;
+  }
+
+  .median-badge strong {
+    font-size: 16px;
+  }
+
+  .legend {
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    justify-content: center;
+    flex-wrap: wrap;
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+
+  .legend-bar span {
+    width: 14px;
+  }
+
+  .overview-panel {
+    padding: 14px 16px;
+    gap: 14px;
+    border-radius: 16px;
+  }
+
+  .overview-panel .panel-header h2 {
+    font-size: 1.1rem;
   }
 
   .overview-focus {
     flex-direction: column;
     align-items: flex-start;
+    padding: 14px;
+  }
+
+  .overview-focus strong {
+    font-size: 20px;
+  }
+
+  .overview-note {
+    font-size: 11px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .toolbar-right {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 360px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar-right {
+    grid-template-columns: 1fr;
   }
 }

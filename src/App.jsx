@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { GeoJSON, MapContainer, ZoomControl, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import { DashboardChatbot } from './components/DashboardChatbot'
 import { AP_DISTRICTS } from './data/apDistricts'
-import { HEALTH_DATA } from './data/healthData'
+import { getDistrictHealthByGeoName } from './data/resolveDistrictHealth'
+import { filterMandalsInsideDistrict } from './utils/mandalSpatialFilter'
 import './App.css'
 
 const DISEASES = ['Cancer', 'Malaria']
@@ -21,6 +23,21 @@ const COLOR_RAMP = [
 ]
 
 const ALL_DISTRICTS = 'All districts'
+
+/** Mandal GeoJSON uses census district labels; map to dashboard district names. */
+const DISTRICT_TO_MANDAL_GEO_DTNAME = {
+  Kadapa: 'Y.S.R.',
+  'SPSR Nellore': 'Sri Potti Sriramulu Nellore',
+}
+
+const mandalGeoDtname = (dashboardDistrict) =>
+  DISTRICT_TO_MANDAL_GEO_DTNAME[dashboardDistrict] ?? dashboardDistrict
+
+const dashboardDistrictFromMandalGeo = (dtname) => {
+  if (dtname === 'Y.S.R.') return 'Kadapa'
+  if (dtname === 'Sri Potti Sriramulu Nellore') return 'SPSR Nellore'
+  return dtname
+}
 
 const MAP_BOUNDS = [
   [12.6, 76.2],
@@ -80,7 +97,7 @@ const MapViewport = ({ district, feature }) => {
     }
     const bounds = getFeatureBounds(feature)
     if (bounds?.isValid()) {
-      map.flyToBounds(bounds, { padding: [32, 32], maxZoom: 9, duration: 0.9 })
+      map.flyToBounds(bounds, { padding: [32, 32], maxZoom: 10, duration: 0.9 })
     }
   }, [map, district, feature])
 
@@ -129,24 +146,37 @@ function App() {
   const [metric, setMetric] = useState('incidence')
   const [year, setYear] = useState(2024)
   const [district, setDistrict] = useState(ALL_DISTRICTS)
+  const [mandalsGeo, setMandalsGeo] = useState(null)
 
-  const districtIndex = useMemo(() => {
-    const map = new Map()
-    HEALTH_DATA.forEach((entry) => map.set(entry.district, entry))
-    return map
+  useEffect(() => {
+    let cancelled = false
+    fetch(`${import.meta.env.BASE_URL}ap-mandals.geojson`)
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status))
+        return res.json()
+      })
+      .then((data) => {
+        if (!cancelled) setMandalsGeo(data)
+      })
+      .catch(() => {
+        if (!cancelled) setMandalsGeo(null)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const districtValues = useMemo(() => {
     return AP_DISTRICTS.features.map((feature) => {
       const name = feature.properties.district
-      const districtData = districtIndex.get(name)
+      const districtData = getDistrictHealthByGeoName(name)
       const value =
         metric === 'cases'
           ? getCases(districtData, disease, year)
           : getIncidence(districtData, disease, year)
-      return { name, value, population: districtData?.population ?? 0 }
+      return { name, value, population: districtData.population }
     })
-  }, [districtIndex, disease, metric, year])
+  }, [disease, metric, year])
 
   const selectedFeature = useMemo(() => {
     if (district === ALL_DISTRICTS) return null
@@ -158,6 +188,30 @@ function App() {
   const maskFeature = useMemo(() => {
     return buildMaskFeature(AP_DISTRICTS.features)
   }, [])
+
+  const mandalLayerData = useMemo(() => {
+    if (!mandalsGeo?.features?.length) return null
+    if (district === ALL_DISTRICTS) return mandalsGeo
+
+    const targetDt = mandalGeoDtname(district)
+    const byLegacyName = mandalsGeo.features.filter(
+      (f) => f.properties?.dtname === targetDt,
+    )
+
+    if (byLegacyName.length > 0) {
+      return { type: 'FeatureCollection', features: byLegacyName }
+    }
+
+    const distFeature = AP_DISTRICTS.features.find(
+      (feat) => feat.properties?.district === district,
+    )
+    if (!distFeature?.geometry) {
+      return { type: 'FeatureCollection', features: [] }
+    }
+
+    const features = filterMandalsInsideDistrict(mandalsGeo.features, distFeature)
+    return { type: 'FeatureCollection', features }
+  }, [mandalsGeo, district])
 
   const stats = useMemo(() => {
     const values = districtValues.map((entry) => entry.value)
@@ -182,13 +236,47 @@ function App() {
     }
   }, [districtValues])
 
-  const activeDistrictData = districtIndex.get(district)
+  const activeDistrictData =
+    district === ALL_DISTRICTS ? null : getDistrictHealthByGeoName(district)
 
   const summaryValue = metric === 'cases'
     ? getCases(activeDistrictData, disease, year)
     : getIncidence(activeDistrictData, disease, year)
 
   const summaryLabel = metric === 'cases' ? 'Cases' : 'Rate per 100k'
+
+  const chatContext = useMemo(
+    () => ({
+      ALL_DISTRICTS,
+      selectedDistrict: district,
+      disease,
+      metric,
+      year,
+      years: YEARS,
+      diseases: DISEASES,
+      districtNames: districtValues.map((e) => e.name),
+      districtValues,
+      mandalCount: mandalsGeo?.features?.length ?? null,
+      stats,
+      totals,
+      summaryLabel,
+      formatNumber,
+      getDistrictData: getDistrictHealthByGeoName,
+      getCases,
+      getIncidence,
+    }),
+    [
+      district,
+      disease,
+      metric,
+      year,
+      districtValues,
+      mandalsGeo,
+      stats,
+      totals,
+      summaryLabel,
+    ],
+  )
 
   return (
     <div className="app-shell">
@@ -197,7 +285,8 @@ function App() {
           <p className="kicker">Andhra Pradesh</p>
           <h1>{disease} {metric === 'incidence' ? 'Incidence Rate' : 'Cases'}</h1>
           <p className="subtitle">
-            District-level rate per 100,000 population · Sample programme · {YEARS[0]}-{YEARS.at(-1)}
+            District-level rate per 100,000 population · Mandal boundaries shown · Sample programme ·{' '}
+            {YEARS[0]}-{YEARS.at(-1)}
           </p>
         </div>
         <div className="year-tabs" role="tablist" aria-label="Year selection">
@@ -250,6 +339,7 @@ function App() {
         </div>
         <div className="toolbar-right">
           <span className="meta-pill">{AP_DISTRICTS.features.length} districts</span>
+          <span className="meta-pill">{mandalsGeo?.features?.length ?? '—'} mandals</span>
           <span className="meta-pill">{YEARS[0]}-{YEARS.at(-1)}</span>
           <span className="meta-pill">Year {year}</span>
         </div>
@@ -294,7 +384,7 @@ function App() {
                 }}
                 onEachFeature={(feature, layer) => {
                   const name = feature?.properties?.district
-                  const districtData = districtIndex.get(name)
+                  const districtData = getDistrictHealthByGeoName(name)
                   const cases = getCases(districtData, disease, year)
                   const incidence = getIncidence(districtData, disease, year)
                   const canShowPopup =
@@ -313,6 +403,47 @@ function App() {
                   })
                 }}
               />
+              {mandalLayerData ? (
+                <GeoJSON
+                  key={`mandals-${district}-${mandalsGeo?.features?.length ?? 0}`}
+                  data={mandalLayerData}
+                  style={() => ({
+                    color:
+                      district === ALL_DISTRICTS
+                        ? 'rgba(44, 39, 34, 0.42)'
+                        : 'rgba(44, 39, 34, 0.58)',
+                    weight: district === ALL_DISTRICTS ? 0.35 : 0.55,
+                    fillOpacity: 0,
+                    opacity: 0.9,
+                  })}
+                  onEachFeature={(feature, layer) => {
+                    const mandalName = feature?.properties?.sdtname ?? 'Mandal'
+                    const geoDt = feature?.properties?.dtname ?? ''
+                    const legacyDistLabel = dashboardDistrictFromMandalGeo(geoDt)
+                    const mapDistrictLabel =
+                      district !== ALL_DISTRICTS ? district : legacyDistLabel
+                    const districtData = getDistrictHealthByGeoName(mapDistrictLabel)
+                    const cases = getCases(districtData, disease, year)
+                    const incidence = getIncidence(districtData, disease, year)
+                    const censusNote =
+                      district !== ALL_DISTRICTS &&
+                      geoDt &&
+                      legacyDistLabel !== mapDistrictLabel
+                        ? `<span style="opacity:0.72;font-size:11px">Mandal file (census): ${geoDt}</span><br/>`
+                        : ''
+                    layer.bindPopup(
+                      `<strong>${mandalName}</strong><br/><span style="opacity:0.85">${mapDistrictLabel}</span><br/>${censusNote}District cases: ${formatNumber(cases)}<br/>District rate: ${incidence.toFixed(1)} per 100k`,
+                      { autoPan: false, className: 'district-popup' },
+                    )
+                    layer.on('mouseover', () => {
+                      layer.openPopup()
+                    })
+                    layer.on('mouseout', () => {
+                      layer.closePopup()
+                    })
+                  }}
+                />
+              ) : null}
               <ZoomControl position="bottomright" />
             </MapContainer>
 
@@ -369,13 +500,25 @@ function App() {
             </div>
           </div>
 
-          <div className="overview-note">
+            <div className="overview-note">
             <p>
-              Select a district to zoom the map. Hover on a district to see values.
+              Select a district to zoom the map and show its mandals. Hover districts or mandals for
+              values (health figures are district-level). Sub-district boundaries: simplified census
+              geometry (MIT,{' '}
+              <a
+                href="https://github.com/datta07/INDIAN-SHAPEFILES"
+                target="_blank"
+                rel="noreferrer"
+              >
+                INDIAN-SHAPEFILES
+              </a>
+              ).
             </p>
           </div>
         </aside>
       </main>
+
+      <DashboardChatbot context={chatContext} />
     </div>
   )
 }
