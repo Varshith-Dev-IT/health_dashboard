@@ -3,7 +3,10 @@ import { GeoJSON, MapContainer, ZoomControl, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { DashboardChatbot } from './components/DashboardChatbot'
 import { AP_DISTRICTS } from './data/apDistricts'
-import { getDistrictHealthByGeoName } from './data/resolveDistrictHealth'
+import {
+  getDistrictHealthByGeoName,
+  getMandalLevelStats,
+} from './data/resolveDistrictHealth'
 import { filterMandalsInsideDistrict } from './utils/mandalSpatialFilter'
 import './App.css'
 
@@ -147,6 +150,7 @@ function App() {
   const [year, setYear] = useState(2024)
   const [district, setDistrict] = useState(ALL_DISTRICTS)
   const [mandalsGeo, setMandalsGeo] = useState(null)
+  const [selectedMandal, setSelectedMandal] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -245,6 +249,17 @@ function App() {
 
   const summaryLabel = metric === 'cases' ? 'Cases' : 'Rate per 100k'
 
+  const selectedMandalStats = useMemo(() => {
+    if (!selectedMandal) return null
+    return getMandalLevelStats(
+      selectedMandal.districtLabel,
+      selectedMandal.sdtname,
+      selectedMandal.dtname,
+      disease,
+      year,
+    )
+  }, [selectedMandal, disease, year])
+
   const chatContext = useMemo(
     () => ({
       ALL_DISTRICTS,
@@ -307,7 +322,13 @@ function App() {
         <div className="toolbar-left">
           <label className="inline-field">
             <span>District</span>
-            <select value={district} onChange={(event) => setDistrict(event.target.value)}>
+            <select
+              value={district}
+              onChange={(event) => {
+                setDistrict(event.target.value)
+                setSelectedMandal(null)
+              }}
+            >
               <option value={ALL_DISTRICTS}>All Andhra Pradesh</option>
               {districtValues.map((entry) => (
                 <option key={entry.name} value={entry.name}>
@@ -395,6 +416,9 @@ function App() {
                     )}<br/>Rate: ${incidence.toFixed(1)} per 100k`,
                     { autoPan: false, className: 'district-popup' },
                   )
+                  layer.on('click', () => {
+                    setSelectedMandal(null)
+                  })
                   layer.on('mouseover', () => {
                     if (canShowPopup) layer.openPopup()
                   })
@@ -405,41 +429,68 @@ function App() {
               />
               {mandalLayerData ? (
                 <GeoJSON
-                  key={`mandals-${district}-${mandalsGeo?.features?.length ?? 0}`}
+                  key={`mandals-${district}-${disease}-${year}-${mandalsGeo?.features?.length ?? 0}`}
                   data={mandalLayerData}
-                  style={() => ({
-                    color:
-                      district === ALL_DISTRICTS
-                        ? 'rgba(44, 39, 34, 0.42)'
-                        : 'rgba(44, 39, 34, 0.58)',
-                    weight: district === ALL_DISTRICTS ? 0.35 : 0.55,
-                    fillOpacity: 0,
-                    opacity: 0.9,
-                  })}
+                  style={(feature) => {
+                    const sdt = feature?.properties?.sdtname ?? ''
+                    const dt = feature?.properties?.dtname ?? ''
+                    const selected =
+                      selectedMandal != null &&
+                      selectedMandal.sdtname === sdt &&
+                      selectedMandal.dtname === dt
+                    return {
+                      className: 'mandal-boundary',
+                      color: selected
+                        ? '#c64b3b'
+                        : district === ALL_DISTRICTS
+                          ? 'rgba(44, 39, 34, 0.42)'
+                          : 'rgba(44, 39, 34, 0.58)',
+                      weight: selected ? 2.2 : district === ALL_DISTRICTS ? 0.35 : 0.55,
+                      fillOpacity: selected ? 0.14 : 0,
+                      opacity: 0.95,
+                    }
+                  }}
                   onEachFeature={(feature, layer) => {
                     const mandalName = feature?.properties?.sdtname ?? 'Mandal'
                     const geoDt = feature?.properties?.dtname ?? ''
                     const legacyDistLabel = dashboardDistrictFromMandalGeo(geoDt)
                     const mapDistrictLabel =
                       district !== ALL_DISTRICTS ? district : legacyDistLabel
-                    const districtData = getDistrictHealthByGeoName(mapDistrictLabel)
-                    const cases = getCases(districtData, disease, year)
-                    const incidence = getIncidence(districtData, disease, year)
-                    const censusNote =
-                      district !== ALL_DISTRICTS &&
-                      geoDt &&
-                      legacyDistLabel !== mapDistrictLabel
-                        ? `<span style="opacity:0.72;font-size:11px">Mandal file (census): ${geoDt}</span><br/>`
-                        : ''
-                    layer.bindPopup(
-                      `<strong>${mandalName}</strong><br/><span style="opacity:0.85">${mapDistrictLabel}</span><br/>${censusNote}District cases: ${formatNumber(cases)}<br/>District rate: ${incidence.toFixed(1)} per 100k`,
-                      { autoPan: false, className: 'district-popup' },
-                    )
-                    layer.on('mouseover', () => {
-                      layer.openPopup()
+
+                    const buildPopupHtml = () => {
+                      const m = getMandalLevelStats(
+                        mapDistrictLabel,
+                        mandalName,
+                        geoDt,
+                        disease,
+                        year,
+                      )
+                      const districtData = getDistrictHealthByGeoName(mapDistrictLabel)
+                      const dCases = getCases(districtData, disease, year)
+                      const dInc = getIncidence(districtData, disease, year)
+                      const censusNote =
+                        district !== ALL_DISTRICTS &&
+                        geoDt &&
+                        legacyDistLabel !== mapDistrictLabel
+                          ? `<span style="opacity:0.72;font-size:11px">Mandal file (census): ${geoDt}</span><br/>`
+                          : ''
+                      return `<strong>${mandalName}</strong><br/><span style="opacity:0.85">${mapDistrictLabel}</span><br/>${censusNote}<strong>Mandal cases (sample):</strong> ${formatNumber(m.cases)}<br/><strong>Mandal rate:</strong> ${m.incidence.toFixed(1)} per 100k<br/><span style="opacity:0.72;font-size:11px">Est. pop. ${formatNumber(m.population)}</span><hr style="border:none;border-top:1px solid rgba(255,255,255,0.18);margin:8px 0"/><span style="opacity:0.85">District cases:</span> ${formatNumber(dCases)}<br/><span style="opacity:0.85">District rate:</span> ${dInc.toFixed(1)} per 100k<br/><span style="opacity:0.65;font-size:11px">Use × to close · Click another mandal to switch</span>`
+                    }
+
+                    layer.bindPopup(buildPopupHtml(), {
+                      autoPan: false,
+                      className: 'district-popup',
+                      closeButton: true,
                     })
-                    layer.on('mouseout', () => {
-                      layer.closePopup()
+                    layer.on('click', (e) => {
+                      L.DomEvent.stopPropagation(e)
+                      setSelectedMandal({
+                        sdtname: mandalName,
+                        dtname: geoDt,
+                        districtLabel: mapDistrictLabel,
+                      })
+                      layer.setPopupContent(buildPopupHtml())
+                      layer.openPopup()
                     })
                   }}
                 />
@@ -500,11 +551,49 @@ function App() {
             </div>
           </div>
 
+          {selectedMandal && selectedMandalStats ? (
+            <div className="overview-mandal">
+              <div className="overview-mandal-head">
+                <div>
+                  <h3>{selectedMandal.sdtname}</h3>
+                  <p>
+                    {selectedMandal.districtLabel} · {disease} · {year}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="mandal-clear"
+                  onClick={() => setSelectedMandal(null)}
+                >
+                  Clear
+                </button>
+              </div>
+              <p className="overview-mandal-note">
+                Sample subdistrict (mandal) figures — deterministic demo values, not official counts.
+              </p>
+              <dl className="overview-mandal-dl">
+                <div>
+                  <dt>Mandal cases</dt>
+                  <dd>{formatNumber(selectedMandalStats.cases)}</dd>
+                </div>
+                <div>
+                  <dt>Rate per 100k</dt>
+                  <dd>{selectedMandalStats.incidence.toFixed(1)}</dd>
+                </div>
+                <div>
+                  <dt>Est. population</dt>
+                  <dd>{formatNumber(selectedMandalStats.population)}</dd>
+                </div>
+              </dl>
+            </div>
+          ) : null}
+
             <div className="overview-note">
             <p>
-              Select a district to zoom the map and show its mandals. Hover districts or mandals for
-              values (health figures are district-level). Sub-district boundaries: simplified census
-              geometry (MIT,{' '}
+              Select a district to zoom the map and show its mandals. Click a mandal to see sample
+              subdistrict cases in this panel; click a mandal to open its popup (it stays until you close it).
+              Sub-district boundaries:
+              simplified census geometry (MIT,{' '}
               <a
                 href="https://github.com/datta07/INDIAN-SHAPEFILES"
                 target="_blank"

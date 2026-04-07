@@ -58,3 +58,34 @@ export function getDistrictHealthByGeoName(geoDistrictName) {
   }
   return syntheticByGeoName.get(geoDistrictName)
 }
+
+/**
+ * Demo subdistrict (mandal) figures: deterministic from names + disease + year
+ * (same inputs always yield the same "random-looking" numbers).
+ */
+export function getMandalLevelStats(
+  geoDistrictName,
+  mandalSdtname,
+  geoDtname,
+  disease,
+  year,
+) {
+  const districtRow = getDistrictHealthByGeoName(geoDistrictName)
+  const distCases = districtRow.series?.[disease]?.[year] ?? 0
+  const distPop = Math.max(1, districtRow.population ?? 1)
+  const key = `${mandalSdtname}|${geoDtname ?? ''}|${geoDistrictName}|${disease}|${year}`
+  const h = hash32(key)
+  const sharePct = 0.035 + ((h % 140) / 1000)
+  const mandalPop = Math.max(5000, Math.round(distPop * sharePct))
+  const caseFrac = 0.025 + (((h >>> 7) % 220) / 1000)
+  let mandalCases = Math.round(distCases * caseFrac)
+  if (distCases > 0 && mandalCases < 1) mandalCases = 1 + (h % 12)
+  if (distCases === 0) mandalCases = 2 + (h % 88)
+  if (distCases > 0) mandalCases = Math.min(mandalCases, distCases)
+  const incidence = (mandalCases / mandalPop) * 100000
+  return {
+    cases: mandalCases,
+    population: mandalPop,
+    incidence,
+  }
+}
