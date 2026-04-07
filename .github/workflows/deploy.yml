@@ -40,6 +40,18 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify dist is a Vite build (not dev index.html)
+        run: |
+          if grep -q 'src/main.jsx' dist/index.html; then
+            echo 'ERROR: dist/index.html still references /src/main.jsx — build misconfigured.'
+            exit 1
+          fi
+          if ! grep -q 'assets/index-' dist/index.html; then
+            echo 'ERROR: dist/index.html missing bundled assets/index-*.js — check vite build.'
+            exit 1
+          fi
+          head -n 20 dist/index.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
