@@ -1,9 +1,11 @@
+# Publishes the Vite `dist/` output. In repo Settings → Pages, choose
+# "GitHub Actions" as the source — NOT "Deploy from a branch" (that would
+# serve raw index.html with /src/main.jsx and show a blank page).
+
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
     branches: [ main ]
 
 permissions:
@@ -25,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
