@@ -1,12 +1,16 @@
-# Publishes the Vite `dist/` output. In repo Settings → Pages, choose
-# "GitHub Actions" as the source — NOT "Deploy from a branch" (that would
-# serve raw index.html with /src/main.jsx and show a blank page).
+# Runs `npm run build` and publishes ./dist (Vite output).
+# Do NOT use the "Static HTML" suggested workflow — that deploys the repo root
+# without building, so the live site keeps /src/main.jsx and breaks.
+#
+# Pages: Settings → Build and deployment → Source → GitHub Actions.
+# First run: Actions → this workflow → Run workflow (or push to main).
 
-name: Deploy to GitHub Pages
+name: Build Vite app and deploy to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, master]
+  workflow_dispatch:
 
 permissions:
   contents: read
