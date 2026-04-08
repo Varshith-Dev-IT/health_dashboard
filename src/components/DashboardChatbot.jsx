@@ -1,7 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { buildChatContextSnapshot } from '../chat/buildChatContextSnapshot'
 import { getDashboardChatReply } from '../chat/dashboardChatbot'
 import './DashboardChatbot.css'
+
+function chatApiBase() {
+  const u = import.meta.env.VITE_CHAT_API_URL
+  return typeof u === 'string' && u.trim() ? u.trim().replace(/\/$/, '') : ''
+}
 
 function RichReply({ text }) {
   const parts = text.split(/\*\*/)
@@ -38,6 +44,7 @@ export function DashboardChatbot({ context }) {
     },
   ])
   const [input, setInput] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const listRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -67,17 +74,59 @@ export function DashboardChatbot({ context }) {
     }
   }, [open])
 
-  const pushExchange = (userText) => {
+  const pushExchange = async (userText) => {
     const t = userText.trim()
-    if (!t) return
-    const answer = getDashboardChatReply(t, context)
-    setMessages((m) => [...m, { role: 'user', text: t }, { role: 'assistant', text: answer }])
+    if (!t || isSending) return
+
+    const base = chatApiBase()
+    const snapshot = buildChatContextSnapshot(context)
+    const historyForApi = messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({ role: m.role, content: m.text }))
+      .slice(-12)
+
+    setMessages((m) => [...m, { role: 'user', text: t }])
+    setIsSending(true)
+
+    let answer
+    if (base) {
+      try {
+        const res = await fetch(`${base}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: t,
+            context: snapshot,
+            history: historyForApi,
+          }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && typeof data.reply === 'string' && data.reply.trim()) {
+          answer = data.reply.trim()
+        } else {
+          const err =
+            typeof data.error === 'string' && data.error.trim()
+              ? data.error.trim()
+              : res.statusText || 'Request failed'
+          throw new Error(err)
+        }
+      } catch {
+        const fallback = getDashboardChatReply(t, context)
+        answer = `**Note:** The AI service was unavailable (${base}). Showing the built-in answer.\n\n${fallback}`
+      }
+    } else {
+      answer = getDashboardChatReply(t, context)
+    }
+
+    setMessages((m) => [...m, { role: 'assistant', text: answer }])
+    setIsSending(false)
   }
 
   const onSubmit = (e) => {
     e.preventDefault()
-    pushExchange(input)
+    const q = input
     setInput('')
+    void pushExchange(q)
   }
 
   const ui = (
@@ -127,6 +176,11 @@ export function DashboardChatbot({ context }) {
                 {msg.role === 'assistant' ? <RichReply text={msg.text} /> : msg.text}
               </div>
             ))}
+            {isSending ? (
+              <div className="chat-bubble chat-bubble-assistant chat-bubble-pending" aria-live="polite">
+                Thinking…
+              </div>
+            ) : null}
           </div>
 
           <div className="chat-suggestions" aria-label="Suggested questions">
@@ -135,8 +189,9 @@ export function DashboardChatbot({ context }) {
                 key={s}
                 type="button"
                 className="chat-chip"
+                disabled={isSending}
                 onClick={() => {
-                  pushExchange(s)
+                  void pushExchange(s)
                 }}
               >
                 {s}
@@ -158,6 +213,7 @@ export function DashboardChatbot({ context }) {
               autoComplete="off"
               enterKeyHint="send"
               inputMode="text"
+              disabled={isSending}
               onFocus={() => {
                 requestAnimationFrame(() => {
                   inputRef.current?.scrollIntoView({
@@ -167,8 +223,8 @@ export function DashboardChatbot({ context }) {
                 })
               }}
             />
-            <button type="submit" className="chat-send">
-              Send
+            <button type="submit" className="chat-send" disabled={isSending}>
+              {isSending ? '…' : 'Send'}
             </button>
           </form>
         </div>

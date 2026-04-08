@@ -146,6 +146,12 @@
   border-bottom-right-radius: 4px;
 }
 
+.chat-bubble-pending {
+  opacity: 0.78;
+  font-style: italic;
+  color: #5c534c;
+}
+
 .chat-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -175,6 +181,12 @@
 .chat-chip:hover {
   border-color: #c64b3b;
   background: rgba(198, 75, 59, 0.06);
+}
+
+.chat-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .chat-form {

@@ -37,7 +37,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Optional: Repository variable VITE_CHAT_API_URL (e.g. https://your-api.onrender.com)
+      # so the live site calls your hosted chat API. Omit to keep rule-only assistant.
       - name: Build
+        env:
+          VITE_CHAT_API_URL: ${{ vars.VITE_CHAT_API_URL }}
         run: npm run build
 
       - name: Verify dist is a Vite build (not dev index.html)
