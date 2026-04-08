@@ -1,9 +1,11 @@
 .dashboard-chatbot {
   position: fixed;
-  z-index: 12000;
+  z-index: 99999;
   font-family: inherit;
   bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px));
   right: max(20px, env(safe-area-inset-right, 0px));
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .chat-fab {
@@ -51,7 +53,7 @@
   bottom: 64px;
   right: 0;
   width: min(400px, calc(100vw - 48px));
-  max-height: min(560px, calc(100svh - 120px));
+  max-height: min(560px, calc(100dvh - 120px));
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -254,23 +256,28 @@
   }
 
   .chat-panel {
-    width: min(400px, calc(100vw - 28px));
-    max-height: min(520px, calc(100svh - 88px));
+    width: min(400px, calc(100vw - 24px));
+    max-height: min(520px, calc(100dvh - 96px));
     bottom: 62px;
   }
 
   .chat-suggestions {
     flex-direction: column;
+    max-height: 38dvh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .chat-chip {
     width: 100%;
     border-radius: 10px;
+    flex-shrink: 0;
   }
 }
 
-/* Full-screen assistant on small phones */
-@media (max-width: 520px) {
+/* Full-screen assistant: avoids clipped panel, keyboard, and nested fixed bugs */
+@media (max-width: 640px) {
   .dashboard-chatbot {
     bottom: max(12px, calc(env(safe-area-inset-bottom, 0px) + 6px));
     right: max(12px, env(safe-area-inset-right, 0px));
@@ -279,29 +286,33 @@
   .chat-panel {
     position: fixed;
     inset: 0;
-    width: auto;
+    width: 100%;
     max-width: none;
-    max-height: none;
-    height: auto;
     border-radius: 0;
-    z-index: 12001;
+    z-index: 100000;
     box-shadow: none;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    min-height: -webkit-fill-available;
   }
 
   .chat-panel-header {
+    flex-shrink: 0;
     padding-top: max(12px, env(safe-area-inset-top, 0px));
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
   }
 
   .chat-messages {
+    flex: 1 1 auto;
     min-height: 0;
-    flex: 1;
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
   }
 
   .chat-suggestions {
+    flex-shrink: 0;
+    max-height: 32dvh;
     padding-left: max(14px, env(safe-area-inset-left, 0px));
     padding-right: max(14px, env(safe-area-inset-right, 0px));
   }
@@ -315,7 +326,10 @@
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+    flex-shrink: 0;
     padding-bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
   }
 
   .chat-send {

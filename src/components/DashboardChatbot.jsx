@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { getDashboardChatReply } from '../chat/dashboardChatbot'
 import './DashboardChatbot.css'
 
@@ -38,11 +39,33 @@ export function DashboardChatbot({ context }) {
   ])
   const [input, setInput] = useState('')
   const listRef = useRef(null)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     if (!open || !listRef.current) return
     listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, open])
+
+  useEffect(() => {
+    if (!open) return undefined
+    const mq = window.matchMedia('(max-width: 640px)')
+    const apply = () => {
+      if (mq.matches) {
+        document.documentElement.style.overflow = 'hidden'
+        document.body.style.overflow = 'hidden'
+      } else {
+        document.documentElement.style.overflow = ''
+        document.body.style.overflow = ''
+      }
+    }
+    apply()
+    mq.addEventListener('change', apply)
+    return () => {
+      mq.removeEventListener('change', apply)
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
+    }
+  }, [open])
 
   const pushExchange = (userText) => {
     const t = userText.trim()
@@ -57,7 +80,7 @@ export function DashboardChatbot({ context }) {
     setInput('')
   }
 
-  return (
+  const ui = (
     <div className="dashboard-chatbot">
       <button
         type="button"
@@ -77,6 +100,7 @@ export function DashboardChatbot({ context }) {
           id={panelId}
           className="chat-panel"
           role="dialog"
+          aria-modal="true"
           aria-label="Map dashboard assistant"
         >
           <div className="chat-panel-header">
@@ -125,12 +149,23 @@ export function DashboardChatbot({ context }) {
               Your question
             </label>
             <input
+              ref={inputRef}
               id={`${panelId}-input`}
               className="chat-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="e.g. Total cases for Andhra Pradesh?"
               autoComplete="off"
+              enterKeyHint="send"
+              inputMode="text"
+              onFocus={() => {
+                requestAnimationFrame(() => {
+                  inputRef.current?.scrollIntoView({
+                    block: 'nearest',
+                    behavior: 'smooth',
+                  })
+                })
+              }}
             />
             <button type="submit" className="chat-send">
               Send
@@ -140,4 +175,6 @@ export function DashboardChatbot({ context }) {
       ) : null}
     </div>
   )
+
+  return createPortal(ui, document.body)
 }

@@ -16,12 +16,73 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 20px 24px;
+  gap: 20px;
+  padding: 12px 24px;
+  min-height: 0;
   border-radius: 18px;
   background: linear-gradient(135deg, #0f1013, #1b1d22 55%, #24262b);
   color: #f8f6f2;
   box-shadow: 0 18px 40px rgba(10, 10, 12, 0.35);
+}
+
+.title-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.topbar-brand {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 4px;
+  width: min(300px, 46vw);
+  min-width: 140px;
+  margin-left: auto;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  box-sizing: border-box;
+}
+
+.topbar-logo-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  line-height: 0;
+  width: 100%;
+}
+
+.topbar-logo {
+  display: block;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  max-height: clamp(96px, 18vw, 152px);
+  object-fit: contain;
+  object-position: right center;
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+
+.topbar-credit {
+  margin: 0;
+  margin-top: 0;
+  font-size: 10px;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  width: 100%;
 }
 
 .title-block h1 {
@@ -42,39 +103,6 @@
   margin: 0;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.68);
-}
-
-.year-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.year-tab {
-  flex-shrink: 0;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.7);
-  padding: 10px 14px;
-  min-height: 44px;
-  box-sizing: border-box;
-  border-radius: 999px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.year-tab:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  color: #fff;
-}
-
-.year-tab.is-active {
-  background: #c64b3b;
-  border-color: #c64b3b;
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(198, 75, 59, 0.4);
 }
 
 .toolbar {
@@ -118,6 +146,54 @@
   color: #2c2520;
 }
 
+.map-level-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.map-level-toggle-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #50473f;
+}
+
+.map-level-toggle-buttons {
+  display: flex;
+  border-radius: 10px;
+  border: 1px solid rgba(68, 60, 52, 0.2);
+  overflow: hidden;
+  background: #fff;
+}
+
+.map-level-btn {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: #5c4f45;
+  font-size: 13px;
+  padding: 10px 14px;
+  min-height: 44px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.map-level-btn:first-child {
+  border-right: 1px solid rgba(68, 60, 52, 0.15);
+}
+
+.map-level-btn:hover:not(.is-active) {
+  background: rgba(198, 75, 59, 0.06);
+}
+
+.map-level-btn.is-active {
+  background: #c64b3b;
+  color: #fff;
+}
+
 .toolbar-right {
   display: flex;
   gap: 10px;
@@ -143,12 +219,50 @@
   flex: 1;
   display: grid;
   gap: 20px;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr) minmax(260px, 340px);
   min-height: 0;
+  align-items: stretch;
 }
 
 .map-panel {
   min-height: 0;
+}
+
+.filters-panel {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filters-panel .toolbar {
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  align-self: stretch;
+  gap: 14px;
+}
+
+.filters-panel .toolbar-left {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.filters-panel .toolbar-right {
+  justify-content: flex-start;
+}
+
+.filters-panel .inline-field select {
+  min-width: 0;
+  max-width: none;
+}
+
+.main-grid > .overview-panel {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .map-shell {
@@ -170,8 +284,11 @@
 
 .map-shell .leaflet-container {
   position: absolute;
-  inset: 0;
+  /* Inset + matching radius so panning doesn’t hide map edges under the shell’s rounded clip */
+  inset: 3px;
+  border-radius: 17px;
   z-index: 1;
+  overflow: hidden;
 }
 
 .median-badge {
@@ -405,21 +522,6 @@
   }
 }
 
-.overview-note {
-  background: rgba(198, 75, 59, 0.08);
-  border: 1px solid rgba(198, 75, 59, 0.3);
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 12px;
-  color: #5b4238;
-}
-
-.overview-note a {
-  color: #a63d2d;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
 .district-popup .leaflet-popup-content-wrapper {
   background: rgba(20, 20, 24, 0.92);
   color: #fff;
@@ -485,8 +587,16 @@
     gap: 16px;
   }
 
-  .overview-panel {
+  .map-panel {
+    order: 1;
+  }
+
+  .filters-panel {
     order: 2;
+  }
+
+  .main-grid > .overview-panel {
+    order: 3;
   }
 
   .overview-grid {
@@ -513,10 +623,26 @@
     gap: 16px;
     padding: 16px 18px;
     border-radius: 16px;
+    min-height: 0;
+  }
+
+  .topbar-brand {
+    align-self: stretch;
+    width: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    padding-top: 12px;
+  }
+
+  .topbar-logo {
+    max-height: clamp(48px, 14vw, 68px);
   }
 
   .title-block {
     min-width: 0;
+    align-self: stretch;
   }
 
   .title-block h1 {
@@ -527,24 +653,6 @@
   .subtitle {
     font-size: 12px;
     line-height: 1.45;
-  }
-
-  .year-tabs {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    width: 100%;
-    padding-bottom: 2px;
-    margin: 0 -4px;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-
-  .year-tabs::-webkit-scrollbar {
-    display: none;
   }
 
   .toolbar {
@@ -602,6 +710,14 @@
     padding: 14px 16px;
   }
 
+  .topbar-logo {
+    max-height: clamp(40px, 11vw, 52px);
+  }
+
+  .topbar-credit {
+    font-size: 9px;
+  }
+
   .kicker {
     font-size: 10px;
     letter-spacing: 0.2em;
@@ -610,6 +726,10 @@
   .map-shell {
     min-height: clamp(280px, 42dvh, 420px);
     border-radius: 16px;
+  }
+
+  .map-shell .leaflet-container {
+    border-radius: 13px;
   }
 
   .median-badge {
@@ -658,12 +778,6 @@
 
   .overview-focus strong {
     font-size: 20px;
-  }
-
-  .overview-note {
-    font-size: 11px;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
   }
 
   .toolbar-right {

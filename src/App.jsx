@@ -25,7 +25,19 @@ const COLOR_RAMP = [
   '#7b1e1e',
 ]
 
+/** Distinct ramp for mandal-level heatmap (district view keeps warm ramp above). */
+const MANDAL_COLOR_RAMP = [
+  '#e8f4fc',
+  '#b8d9f0',
+  '#7eb8d9',
+  '#4a90b8',
+  '#2a6a94',
+  '#0f3d5c',
+]
+
 const ALL_DISTRICTS = 'All districts'
+const MAP_LEVEL_DISTRICT = 'district'
+const MAP_LEVEL_MANDAL = 'mandal'
 
 /** Mandal GeoJSON uses census district labels; map to dashboard district names. */
 const DISTRICT_TO_MANDAL_GEO_DTNAME = {
@@ -42,9 +54,16 @@ const dashboardDistrictFromMandalGeo = (dtname) => {
   return dtname
 }
 
+/** Initial / “reset” view for Andhra Pradesh */
 const MAP_BOUNDS = [
   [12.6, 76.2],
   [19.6, 84.7],
+]
+
+/** Wider limit so you can pan past the state edge and keep coast / borders fully in view */
+const MAP_MAX_BOUNDS = [
+  [11.85, 75.35],
+  [20.45, 85.65],
 ]
 
 const WORLD_BOUNDS = [
@@ -95,7 +114,7 @@ const MapViewport = ({ district, feature }) => {
   useEffect(() => {
     if (!map) return
     if (district === ALL_DISTRICTS || !feature) {
-      map.flyToBounds(MAP_BOUNDS, { padding: [32, 32], duration: 0.9 })
+      map.flyToBounds(MAP_BOUNDS, { padding: [48, 48], duration: 0.9 })
       return
     }
     const bounds = getFeatureBounds(feature)
@@ -138,10 +157,19 @@ const getMedian = (values) => {
   return sorted[middle]
 }
 
-const getFillColor = (value, stats) => {
-  if (!Number.isFinite(value)) return COLOR_RAMP[0]
+const getFillColor = (value, stats, ramp = COLOR_RAMP) => {
+  if (!Number.isFinite(value)) return ramp[0]
   const index = stats.quantiles.findIndex((breakpoint) => value <= breakpoint)
-  return COLOR_RAMP[Math.max(0, index)] ?? COLOR_RAMP.at(-1)
+  return ramp[Math.max(0, index)] ?? ramp.at(-1)
+}
+
+const getMandalFeatureMetric = (feature, districtScope, disease, yearKey, metricKey) => {
+  const mandalName = feature?.properties?.sdtname ?? ''
+  const geoDt = feature?.properties?.dtname ?? ''
+  const mapDistrictLabel =
+    districtScope !== ALL_DISTRICTS ? districtScope : dashboardDistrictFromMandalGeo(geoDt)
+  const m = getMandalLevelStats(mapDistrictLabel, mandalName, geoDt, disease, yearKey)
+  return metricKey === 'cases' ? m.cases : m.incidence
 }
 
 function App() {
@@ -151,6 +179,7 @@ function App() {
   const [district, setDistrict] = useState(ALL_DISTRICTS)
   const [mandalsGeo, setMandalsGeo] = useState(null)
   const [selectedMandal, setSelectedMandal] = useState(null)
+  const [mapLevel, setMapLevel] = useState(MAP_LEVEL_DISTRICT)
 
   useEffect(() => {
     let cancelled = false
@@ -217,6 +246,26 @@ function App() {
     return { type: 'FeatureCollection', features }
   }, [mandalsGeo, district])
 
+  const mandalHeatStats = useMemo(() => {
+    if (mapLevel !== MAP_LEVEL_MANDAL || !mandalLayerData?.features?.length) {
+      return {
+        quantiles: Array.from({ length: MANDAL_COLOR_RAMP.length }, () => 0),
+        median: 0,
+        min: 0,
+        max: 0,
+      }
+    }
+    const values = mandalLayerData.features.map((feature) =>
+      getMandalFeatureMetric(feature, district, disease, year, metric),
+    )
+    return {
+      min: Math.min(...values),
+      max: Math.max(...values),
+      median: getMedian(values),
+      quantiles: getQuantileBreaks(values, MANDAL_COLOR_RAMP.length),
+    }
+  }, [mapLevel, mandalLayerData, district, disease, year, metric])
+
   const stats = useMemo(() => {
     const values = districtValues.map((entry) => entry.value)
     const min = Math.min(...values)
@@ -260,6 +309,15 @@ function App() {
     )
   }, [selectedMandal, disease, year])
 
+  const activeHeatStats = mapLevel === MAP_LEVEL_MANDAL ? mandalHeatStats : stats
+  const activeColorRamp = mapLevel === MAP_LEVEL_MANDAL ? MANDAL_COLOR_RAMP : COLOR_RAMP
+  const medianBadgeLabel =
+    mapLevel === MAP_LEVEL_MANDAL ? 'Mandal median' : 'AP median'
+  const medianDisplayValue =
+    metric === 'cases'
+      ? formatNumber(activeHeatStats.median)
+      : activeHeatStats.median.toFixed(1)
+
   const chatContext = useMemo(
     () => ({
       ALL_DISTRICTS,
@@ -279,6 +337,7 @@ function App() {
       getDistrictData: getDistrictHealthByGeoName,
       getCases,
       getIncidence,
+      mapLevel,
     }),
     [
       district,
@@ -290,6 +349,7 @@ function App() {
       stats,
       totals,
       summaryLabel,
+      mapLevel,
     ],
   )
 
@@ -300,78 +360,135 @@ function App() {
           <p className="kicker">Andhra Pradesh</p>
           <h1>{disease} {metric === 'incidence' ? 'Incidence Rate' : 'Cases'}</h1>
           <p className="subtitle">
-            District-level rate per 100,000 population · Mandal boundaries shown · Sample programme ·{' '}
-            {YEARS[0]}-{YEARS.at(-1)}
+            {mapLevel === MAP_LEVEL_MANDAL
+              ? 'Mandal-level heatmap (sample subdistrict values) · cool palette · '
+              : 'District-level heatmap · warm palette · '}
+            Sample programme · {YEARS[0]}-{YEARS.at(-1)}
           </p>
         </div>
-        <div className="year-tabs" role="tablist" aria-label="Year selection">
-          {YEARS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              className={option === year ? 'year-tab is-active' : 'year-tab'}
-              onClick={() => setYear(option)}
-            >
-              {option}
-            </button>
-          ))}
+        <div className="topbar-brand">
+          <div className="topbar-logo-wrap">
+            <img
+              className="topbar-logo"
+              src={`${import.meta.env.BASE_URL}logo.png`}
+              alt="GeoIntel lab"
+              decoding="async"
+            />
+          </div>
+          <p className="topbar-credit">Powered by Geo-Intel Lab, IITTNIF, Tirupati</p>
         </div>
       </header>
 
-      <section className="toolbar">
-        <div className="toolbar-left">
-          <label className="inline-field">
-            <span>District</span>
-            <select
-              value={district}
-              onChange={(event) => {
-                setDistrict(event.target.value)
-                setSelectedMandal(null)
-              }}
-            >
-              <option value={ALL_DISTRICTS}>All Andhra Pradesh</option>
-              {districtValues.map((entry) => (
-                <option key={entry.name} value={entry.name}>
-                  {entry.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="inline-field">
-            <span>Disease</span>
-            <select value={disease} onChange={(event) => setDisease(event.target.value)}>
-              {DISEASES.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="inline-field">
-            <span>Metric</span>
-            <select value={metric} onChange={(event) => setMetric(event.target.value)}>
-              {METRICS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="toolbar-right">
-          <span className="meta-pill">{AP_DISTRICTS.features.length} districts</span>
-          <span className="meta-pill">{mandalsGeo?.features?.length ?? '—'} mandals</span>
-          <span className="meta-pill">{YEARS[0]}-{YEARS.at(-1)}</span>
-          <span className="meta-pill">Year {year}</span>
-        </div>
-      </section>
-
       <main className="main-grid">
+        <aside className="filters-panel">
+          <section className="toolbar" aria-label="Map filters">
+            <div className="toolbar-left">
+              <label className="inline-field">
+                <span>District</span>
+                <select
+                  value={district}
+                  onChange={(event) => {
+                    setDistrict(event.target.value)
+                    setSelectedMandal(null)
+                  }}
+                >
+                  <option value={ALL_DISTRICTS}>All Andhra Pradesh</option>
+                  {districtValues.map((entry) => (
+                    <option key={entry.name} value={entry.name}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-field">
+                <span>Year</span>
+                <select
+                  value={year}
+                  onChange={(event) => setYear(Number(event.target.value))}
+                  aria-label="Year"
+                >
+                  {YEARS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-field">
+                <span>Disease</span>
+                <select value={disease} onChange={(event) => setDisease(event.target.value)}>
+                  {DISEASES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="inline-field">
+                <span>Metric</span>
+                <select value={metric} onChange={(event) => setMetric(event.target.value)}>
+                  {METRICS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div
+                className="map-level-toggle"
+                role="group"
+                aria-label="Heat map aggregation level"
+              >
+                <span className="map-level-toggle-label">Heat map</span>
+                <div className="map-level-toggle-buttons">
+                  <button
+                    type="button"
+                    className={
+                      mapLevel === MAP_LEVEL_DISTRICT
+                        ? 'map-level-btn is-active'
+                        : 'map-level-btn'
+                    }
+                    onClick={() => setMapLevel(MAP_LEVEL_DISTRICT)}
+                  >
+                    District
+                  </button>
+                  <button
+                    type="button"
+                    className={
+                      mapLevel === MAP_LEVEL_MANDAL ? 'map-level-btn is-active' : 'map-level-btn'
+                    }
+                    onClick={() => setMapLevel(MAP_LEVEL_MANDAL)}
+                  >
+                    Mandal
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="toolbar-right">
+              <span className="meta-pill">{AP_DISTRICTS.features.length} districts</span>
+              <span className="meta-pill">{mandalsGeo?.features?.length ?? '—'} mandals</span>
+              <span className="meta-pill">{YEARS[0]}-{YEARS.at(-1)}</span>
+            </div>
+          </section>
+
+          <div className="overview-focus">
+            <div>
+              <h3>{district === ALL_DISTRICTS ? 'Selected district' : district}</h3>
+              <p>{district === ALL_DISTRICTS ? 'Choose a district to zoom in.' : 'Focused summary'}</p>
+            </div>
+            <div>
+              <strong>{district === ALL_DISTRICTS ? '--' : formatNumber(summaryValue)}</strong>
+              <span>{summaryLabel}</span>
+            </div>
+          </div>
+        </aside>
+
         <section className="map-panel">
           <div className="map-shell">
             <MapContainer
               bounds={MAP_BOUNDS}
-              maxBounds={MAP_BOUNDS}
+              maxBounds={MAP_MAX_BOUNDS}
+              maxBoundsViscosity={0.85}
               minZoom={6}
               maxZoom={9}
               zoomControl={false}
@@ -390,16 +507,24 @@ function App() {
                 interactive={false}
               />
               <GeoJSON
-                key={`${disease}-${year}-${metric}-${district}`}
+                key={`${disease}-${year}-${metric}-${district}-${mapLevel}`}
                 data={AP_DISTRICTS}
                 style={(feature) => {
                   const name = feature?.properties?.district
-                  const value = districtValues.find((entry) => entry.name === name)?.value
                   const focused = district === ALL_DISTRICTS || district === name
+                  if (mapLevel === MAP_LEVEL_MANDAL) {
+                    return {
+                      color: focused ? '#4a433c' : '#8a8078',
+                      weight: focused ? 1.6 : 0.9,
+                      fillColor: '#c4bfb6',
+                      fillOpacity: focused ? 0.22 : 0.1,
+                    }
+                  }
+                  const value = districtValues.find((entry) => entry.name === name)?.value
                   return {
                     color: focused ? '#2c2722' : '#61554a',
                     weight: focused ? 2 : 1,
-                    fillColor: getFillColor(value, stats),
+                    fillColor: getFillColor(value, stats, COLOR_RAMP),
                     fillOpacity: focused ? 0.85 : 0.22,
                   }
                 }}
@@ -429,7 +554,7 @@ function App() {
               />
               {mandalLayerData ? (
                 <GeoJSON
-                  key={`mandals-${district}-${disease}-${year}-${mandalsGeo?.features?.length ?? 0}`}
+                  key={`mandals-${district}-${disease}-${year}-${mapLevel}-${mandalsGeo?.features?.length ?? 0}`}
                   data={mandalLayerData}
                   style={(feature) => {
                     const sdt = feature?.properties?.sdtname ?? ''
@@ -438,6 +563,23 @@ function App() {
                       selectedMandal != null &&
                       selectedMandal.sdtname === sdt &&
                       selectedMandal.dtname === dt
+                    if (mapLevel === MAP_LEVEL_MANDAL) {
+                      const mValue = getMandalFeatureMetric(
+                        feature,
+                        district,
+                        disease,
+                        year,
+                        metric,
+                      )
+                      return {
+                        className: 'mandal-boundary',
+                        color: selected ? '#0a1620' : 'rgba(15, 61, 92, 0.55)',
+                        weight: selected ? 2.2 : 0.35,
+                        fillColor: getFillColor(mValue, mandalHeatStats, MANDAL_COLOR_RAMP),
+                        fillOpacity: selected ? 0.92 : 0.82,
+                        opacity: 1,
+                      }
+                    }
                     return {
                       className: 'mandal-boundary',
                       color: selected
@@ -499,14 +641,16 @@ function App() {
             </MapContainer>
 
             <div className="median-badge">
-              <span>AP median {summaryLabel.toLowerCase()}</span>
-              <strong>{stats.median.toFixed(1)}</strong>
+              <span>
+                {medianBadgeLabel} {summaryLabel.toLowerCase()}
+              </span>
+              <strong>{medianDisplayValue}</strong>
             </div>
 
             <div className="legend">
               <span>Low</span>
               <div className="legend-bar">
-                {COLOR_RAMP.map((color) => (
+                {activeColorRamp.map((color) => (
                   <span key={color} style={{ background: color }} aria-hidden="true"></span>
                 ))}
               </div>
@@ -537,17 +681,6 @@ function App() {
             <div className="overview-card">
               <span>Total {summaryLabel.toLowerCase()}</span>
               <strong>{formatNumber(totals.totalCases)}</strong>
-            </div>
-          </div>
-
-          <div className="overview-focus">
-            <div>
-              <h3>{district === ALL_DISTRICTS ? 'Selected district' : district}</h3>
-              <p>{district === ALL_DISTRICTS ? 'Choose a district to zoom in.' : 'Focused summary'}</p>
-            </div>
-            <div>
-              <strong>{district === ALL_DISTRICTS ? '--' : formatNumber(summaryValue)}</strong>
-              <span>{summaryLabel}</span>
             </div>
           </div>
 
@@ -587,23 +720,6 @@ function App() {
               </dl>
             </div>
           ) : null}
-
-            <div className="overview-note">
-            <p>
-              Select a district to zoom the map and show its mandals. Click a mandal to see sample
-              subdistrict cases in this panel; click a mandal to open its popup (it stays until you close it).
-              Sub-district boundaries:
-              simplified census geometry (MIT,{' '}
-              <a
-                href="https://github.com/datta07/INDIAN-SHAPEFILES"
-                target="_blank"
-                rel="noreferrer"
-              >
-                INDIAN-SHAPEFILES
-              </a>
-              ).
-            </p>
-          </div>
         </aside>
       </main>
 
